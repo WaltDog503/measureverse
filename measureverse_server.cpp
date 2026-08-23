@@ -6,11 +6,12 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sqlite3.h>
 
 using namespace std;
 
 // ============================================================================
-// COMMENT LEARNING RENDITIONS & STRUCTURE DEFINITIONS
+// DATA MODELS
 // ============================================================================
 
 struct CalibrationPoint {
@@ -19,6 +20,7 @@ struct CalibrationPoint {
 };
 
 struct InventoryItem {
+    int id;
     double min_dimension;
     double max_dimension;
     string sku_id;
@@ -26,7 +28,132 @@ struct InventoryItem {
     int stock_quantity;
 };
 
-// O(log n) Dimension Calibration
+// ============================================================================
+// DATABASE LAYER (SQLite3)
+// ============================================================================
+
+class DatabaseManager {
+private:
+    sqlite3* db;
+
+public:
+    DatabaseManager(const string& db_name) : db(nullptr) {
+        if (sqlite3_open(db_name.c_str(), &db) != SQLITE_OK) {
+            cerr << "Cannot open database: " << sqlite3_errmsg(db) << endl;
+        }
+    }
+
+    ~DatabaseManager() {
+        if (db) {
+            sqlite3_close(db);
+        }
+    }
+
+    bool initSchema() {
+        bool success = true;
+        const char* schema_sql = 
+            "CREATE TABLE IF NOT EXISTS calibration_points ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  sensor_val REAL NOT NULL,"
+            "  offset_correction REAL NOT NULL"
+            ");"
+            "CREATE TABLE IF NOT EXISTS inventory_items ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  min_dim REAL NOT NULL,"
+            "  max_dim REAL NOT NULL,"
+            "  sku_id TEXT UNIQUE NOT NULL,"
+            "  category TEXT NOT NULL,"
+            "  stock_qty INTEGER NOT NULL"
+            ");"
+            "CREATE TABLE IF NOT EXISTS measurement_logs ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  raw_reading REAL NOT NULL,"
+            "  scale_factor REAL NOT NULL,"
+            "  computed_dimension REAL NOT NULL,"
+            "  matched_sku TEXT NOT NULL,"
+            "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+            ");";
+
+        char* err_msg = nullptr;
+        if (sqlite3_exec(db, schema_sql, nullptr, nullptr, &err_msg) != SQLITE_OK) {
+            cerr << "Schema creation error: " << err_msg << endl;
+            sqlite3_free(err_msg);
+            success = false;
+        }
+
+        // Seed initial data if tables are empty
+        if (success) {
+            const char* seed_sql = 
+                "INSERT OR IGNORE INTO calibration_points (id, sensor_val, offset_correction) VALUES"
+                "  (1, 10.0, 0.50), (2, 20.0, 0.85), (3, 30.0, 1.20), (4, 40.0, 1.65), (5, 50.0, 2.10);"
+                "INSERT OR IGNORE INTO inventory_items (id, min_dim, max_dim, sku_id, category, stock_qty) VALUES"
+                "  (1, 12.0, 18.0, 'SMH-SKU-SMALL', 'Topwear', 50),"
+                "  (2, 18.1, 24.0, 'SMH-SKU-MED',   'Topwear', 75),"
+                "  (3, 24.1, 32.0, 'SMH-SKU-LARGE', 'Topwear', 60),"
+                "  (4, 32.1, 42.0, 'SMH-SKU-XLARGE', 'Topwear', 25);";
+            sqlite3_exec(db, seed_sql, nullptr, nullptr, nullptr);
+        }
+
+        return success;
+    }
+
+    vector<CalibrationPoint> loadCalibrationPoints() {
+        vector<CalibrationPoint> points;
+        const char* query = "SELECT sensor_val, offset_correction FROM calibration_points ORDER BY sensor_val ASC;";
+        sqlite3_stmt* stmt;
+
+        if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                CalibrationPoint cp;
+                cp.sensor_val = sqlite3_column_double(stmt, 0);
+                cp.offset_correction = sqlite3_column_double(stmt, 1);
+                points.push_back(cp);
+            }
+            sqlite3_finalize(stmt);
+        }
+        return points;
+    }
+
+    vector<InventoryItem> loadInventoryCatalog() {
+        vector<InventoryItem> items;
+        const char* query = "SELECT id, min_dim, max_dim, sku_id, category, stock_qty FROM inventory_items ORDER BY min_dim ASC;";
+        sqlite3_stmt* stmt;
+
+        if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                InventoryItem item;
+                item.id = sqlite3_column_int(stmt, 0);
+                item.min_dimension = sqlite3_column_double(stmt, 1);
+                item.max_dimension = sqlite3_column_double(stmt, 2);
+                item.sku_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+                item.category_name = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+                item.stock_quantity = sqlite3_column_int(stmt, 5);
+                items.push_back(item);
+            }
+            sqlite3_finalize(stmt);
+        }
+        return items;
+    }
+
+    void logMeasurement(double raw, double scale, double computed, const string& sku) {
+        const char* query = "INSERT INTO measurement_logs (raw_reading, scale_factor, computed_dimension, matched_sku) VALUES (?, ?, ?, ?);";
+        sqlite3_stmt* stmt;
+
+        if (sqlite3_prepare_v2(db, query, -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_double(stmt, 1, raw);
+            sqlite3_bind_double(stmt, 2, scale);
+            sqlite3_bind_double(stmt, 3, computed);
+            sqlite3_bind_text(stmt, 4, sku.c_str(), -1, SQLITE_STATIC);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
+        }
+    }
+};
+
+// ============================================================================
+// O(log n) SEARCH PIPELINE
+// ============================================================================
+
 double calculateDimension(const vector<CalibrationPoint>& table, double raw_input, double scale) {
     double calculated_val = 0.0;
     
@@ -42,7 +169,7 @@ double calculateDimension(const vector<CalibrationPoint>& table, double raw_inpu
                 low = mid + 1;
             } else {
                 if (mid == 0) {
-                    high = table.size(); // Terminate cleanly without break
+                    high = table.size();
                 } else {
                     high = mid - 1;
                 }
@@ -56,9 +183,8 @@ double calculateDimension(const vector<CalibrationPoint>& table, double raw_inpu
     return calculated_val;
 }
 
-// O(log n) SKU Bin Matching
 InventoryItem searchSKUBin(const vector<InventoryItem>& catalog, double dimension) {
-    InventoryItem match = {0.0, 0.0, "NOT_FOUND", "None", 0};
+    InventoryItem match = {0, 0.0, 0.0, "NOT_FOUND", "None", 0};
     
     if (!catalog.empty()) {
         size_t low = 0;
@@ -72,7 +198,7 @@ InventoryItem searchSKUBin(const vector<InventoryItem>& catalog, double dimensio
                 found = true;
             } else if (dimension < catalog[mid].min_dimension) {
                 if (mid == 0) {
-                    high = catalog.size(); // Terminate cleanly without break
+                    high = catalog.size();
                 } else {
                     high = mid - 1;
                 }
@@ -85,7 +211,6 @@ InventoryItem searchSKUBin(const vector<InventoryItem>& catalog, double dimensio
     return match;
 }
 
-// Helper to extract double value from JSON substring
 double extractJsonDouble(const string& body, const string& key) {
     double value = 0.0;
     size_t key_pos = body.find("\"" + key + "\"");
@@ -105,24 +230,18 @@ double extractJsonDouble(const string& body, const string& key) {
 }
 
 // ============================================================================
-// HTTP REST DAEMON
+// MAIN DAEMON
 // ============================================================================
 
 int main() {
-    const vector<CalibrationPoint> calibration_table = {
-        {10.0, 0.50},
-        {20.0, 0.85},
-        {30.0, 1.20},
-        {40.0, 1.65},
-        {50.0, 2.10}
-    };
+    DatabaseManager db_manager("measureverse.db");
+    if (!db_manager.initSchema()) {
+        cerr << "Failed to initialize database schema." << endl;
+        return 1;
+    }
 
-    const vector<InventoryItem> live_catalog = {
-        {12.0, 18.0, "SMH-SKU-SMALL", "Topwear", 50},
-        {18.1, 24.0, "SMH-SKU-MED",   "Topwear", 75},
-        {24.1, 32.0, "SMH-SKU-LARGE", "Topwear", 60},
-        {32.1, 42.0, "SMH-SKU-XLARGE", "Topwear", 25}
-    };
+    vector<CalibrationPoint> calibration_table = db_manager.loadCalibrationPoints();
+    vector<InventoryItem> live_catalog = db_manager.loadInventoryCatalog();
 
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -151,8 +270,9 @@ int main() {
     }
 
     cout << "=====================================================" << endl;
-    cout << "  SHAKINGMYHEAD (S.M.H.) MEASUREVERSE SERVICE LIVE   " << endl;
-    cout << "  Listening on http://localhost:8080/api/v1/measure  " << endl;
+    cout << "  MEASUREVERSE SERVICE + SQLITE3 DATABASE ATTACHED   " << endl;
+    cout << "  Database File: measureverse.db                     " << endl;
+    cout << "  Listening on:  http://localhost:8080/api/v1/measure" << endl;
     cout << "=====================================================" << endl;
 
     while (true) {
@@ -178,6 +298,9 @@ int main() {
 
             double target_dim = calculateDimension(calibration_table, raw_reading, scale_factor);
             InventoryItem match = searchSKUBin(live_catalog, target_dim);
+
+            // Log event to persistent SQLite database
+            db_manager.logMeasurement(raw_reading, scale_factor, target_dim, match.sku_id);
 
             stringstream json_response;
             json_response << "{\n";
