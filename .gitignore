@@ -1,0 +1,6 @@
+*.o
+*.so
+measureverse_server
+build/
+.vscode/
+*.log
