@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -47,54 +48,6 @@ public:
         if (db) {
             sqlite3_close(db);
         }
-    }
-
-    bool initSchema() {
-        bool success = true;
-        const char* schema_sql = 
-            "CREATE TABLE IF NOT EXISTS calibration_points ("
-            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  sensor_val REAL NOT NULL,"
-            "  offset_correction REAL NOT NULL"
-            ");"
-            "CREATE TABLE IF NOT EXISTS inventory_items ("
-            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  min_dim REAL NOT NULL,"
-            "  max_dim REAL NOT NULL,"
-            "  sku_id TEXT UNIQUE NOT NULL,"
-            "  category TEXT NOT NULL,"
-            "  stock_qty INTEGER NOT NULL"
-            ");"
-            "CREATE TABLE IF NOT EXISTS measurement_logs ("
-            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "  raw_reading REAL NOT NULL,"
-            "  scale_factor REAL NOT NULL,"
-            "  computed_dimension REAL NOT NULL,"
-            "  matched_sku TEXT NOT NULL,"
-            "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
-            ");";
-
-        char* err_msg = nullptr;
-        if (sqlite3_exec(db, schema_sql, nullptr, nullptr, &err_msg) != SQLITE_OK) {
-            cerr << "Schema creation error: " << err_msg << endl;
-            sqlite3_free(err_msg);
-            success = false;
-        }
-
-        // Seed initial data if tables are empty
-        if (success) {
-            const char* seed_sql = 
-                "INSERT OR IGNORE INTO calibration_points (id, sensor_val, offset_correction) VALUES"
-                "  (1, 10.0, 0.50), (2, 20.0, 0.85), (3, 30.0, 1.20), (4, 40.0, 1.65), (5, 50.0, 2.10);"
-                "INSERT OR IGNORE INTO inventory_items (id, min_dim, max_dim, sku_id, category, stock_qty) VALUES"
-                "  (1, 12.0, 18.0, 'SMH-SKU-SMALL', 'Topwear', 50),"
-                "  (2, 18.1, 24.0, 'SMH-SKU-MED',   'Topwear', 75),"
-                "  (3, 24.1, 32.0, 'SMH-SKU-LARGE', 'Topwear', 60),"
-                "  (4, 32.1, 42.0, 'SMH-SKU-XLARGE', 'Topwear', 25);";
-            sqlite3_exec(db, seed_sql, nullptr, nullptr, nullptr);
-        }
-
-        return success;
     }
 
     vector<CalibrationPoint> loadCalibrationPoints() {
@@ -235,10 +188,6 @@ double extractJsonDouble(const string& body, const string& key) {
 
 int main() {
     DatabaseManager db_manager("measureverse.db");
-    if (!db_manager.initSchema()) {
-        cerr << "Failed to initialize database schema." << endl;
-        return 1;
-    }
 
     vector<CalibrationPoint> calibration_table = db_manager.loadCalibrationPoints();
     vector<InventoryItem> live_catalog = db_manager.loadInventoryCatalog();
@@ -270,9 +219,9 @@ int main() {
     }
 
     cout << "=====================================================" << endl;
-    cout << "  MEASUREVERSE SERVICE + SQLITE3 DATABASE ATTACHED   " << endl;
-    cout << "  Database File: measureverse.db                     " << endl;
-    cout << "  Listening on:  http://localhost:8080/api/v1/measure" << endl;
+    cout << "  MEASUREVERSE SIZING ENGINE & DASHBOARD READY       " << endl;
+    cout << "  Web UI:       http://localhost:8080/               " << endl;
+    cout << "  API Endpoint: http://localhost:8080/api/v1/measure " << endl;
     cout << "=====================================================" << endl;
 
     while (true) {
@@ -281,48 +230,81 @@ int main() {
             continue;
         }
 
-        char buffer[4096] = {0};
+        char buffer[8192] = {0};
         ssize_t bytes_read = read(client_socket, buffer, sizeof(buffer) - 1);
 
         if (bytes_read > 0) {
             string request_str(buffer);
-            size_t body_pos = request_str.find("\r\n\r\n");
-            string body = (body_pos != string::npos) ? request_str.substr(body_pos + 4) : "";
-
-            double raw_reading = extractJsonDouble(body, "raw_reading");
-            double scale_factor = extractJsonDouble(body, "scale_factor");
-
-            if (scale_factor == 0.0) {
-                scale_factor = 1.0;
-            }
-
-            double target_dim = calculateDimension(calibration_table, raw_reading, scale_factor);
-            InventoryItem match = searchSKUBin(live_catalog, target_dim);
-
-            // Log event to persistent SQLite database
-            db_manager.logMeasurement(raw_reading, scale_factor, target_dim, match.sku_id);
-
-            stringstream json_response;
-            json_response << "{\n";
-            json_response << "  \"target_dimension\": " << target_dim << ",\n";
-            if (match.sku_id != "NOT_FOUND" && match.stock_quantity > 0) {
-                json_response << "  \"status\": \"success\",\n";
-                json_response << "  \"matched_sku\": \"" << match.sku_id << "\",\n";
-                json_response << "  \"category\": \"" << match.category_name << "\",\n";
-                json_response << "  \"stock_available\": " << match.stock_quantity << "\n";
-            } else {
-                json_response << "  \"status\": \"out_of_stock\",\n";
-                json_response << "  \"matched_sku\": \"UNAVAILABLE\"\n";
-            }
-            json_response << "}";
-
-            string json_payload = json_response.str();
             stringstream http_response;
-            http_response << "HTTP/1.1 200 OK\r\n";
-            http_response << "Content-Type: application/json\r\n";
-            http_response << "Content-Length: " << json_payload.size() << "\r\n";
-            http_response << "Connection: close\r\n\r\n";
-            http_response << json_payload;
+
+            // 1. Handle CORS Preflight
+            if (request_str.rfind("OPTIONS", 0) == 0) {
+                http_response << "HTTP/1.1 204 No Content\r\n";
+                http_response << "Access-Control-Allow-Origin: *\r\n";
+                http_response << "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n";
+                http_response << "Access-Control-Allow-Headers: Content-Type\r\n";
+                http_response << "Connection: close\r\n\r\n";
+            }
+            // 2. Handle Root Dashboard Request (GET /)
+            else if (request_str.rfind("GET / ", 0) == 0 || request_str.rfind("GET /index.html", 0) == 0) {
+                ifstream html_file("index.html");
+                if (html_file.is_open()) {
+                    stringstream html_stream;
+                    html_stream << html_file.rdbuf();
+                    string html_content = html_stream.str();
+
+                    http_response << "HTTP/1.1 200 OK\r\n";
+                    http_response << "Content-Type: text/html; charset=utf-8\r\n";
+                    http_response << "Content-Length: " << html_content.size() << "\r\n";
+                    http_response << "Connection: close\r\n\r\n";
+                    http_response << html_content;
+                } else {
+                    string not_found = "<h1>404 Not Found: index.html missing</h1>";
+                    http_response << "HTTP/1.1 404 Not Found\r\n";
+                    http_response << "Content-Type: text/html\r\n";
+                    http_response << "Content-Length: " << not_found.size() << "\r\n";
+                    http_response << "Connection: close\r\n\r\n" << not_found;
+                }
+            }
+            // 3. Handle REST Sizing Measurement (POST /api/v1/measure)
+            else {
+                size_t body_pos = request_str.find("\r\n\r\n");
+                string body = (body_pos != string::npos) ? request_str.substr(body_pos + 4) : "";
+
+                double raw_reading = extractJsonDouble(body, "raw_reading");
+                double scale_factor = extractJsonDouble(body, "scale_factor");
+
+                if (scale_factor == 0.0) {
+                    scale_factor = 1.0;
+                }
+
+                double target_dim = calculateDimension(calibration_table, raw_reading, scale_factor);
+                InventoryItem match = searchSKUBin(live_catalog, target_dim);
+
+                db_manager.logMeasurement(raw_reading, scale_factor, target_dim, match.sku_id);
+
+                stringstream json_response;
+                json_response << "{\n";
+                json_response << "  \"target_dimension\": " << target_dim << ",\n";
+                if (match.sku_id != "NOT_FOUND" && match.stock_quantity > 0) {
+                    json_response << "  \"status\": \"success\",\n";
+                    json_response << "  \"matched_sku\": \"" << match.sku_id << "\",\n";
+                    json_response << "  \"category\": \"" << match.category_name << "\",\n";
+                    json_response << "  \"stock_available\": " << match.stock_quantity << "\n";
+                } else {
+                    json_response << "  \"status\": \"out_of_stock\",\n";
+                    json_response << "  \"matched_sku\": \"UNAVAILABLE\"\n";
+                }
+                json_response << "}";
+
+                string json_payload = json_response.str();
+                http_response << "HTTP/1.1 200 OK\r\n";
+                http_response << "Access-Control-Allow-Origin: *\r\n";
+                http_response << "Content-Type: application/json\r\n";
+                http_response << "Content-Length: " << json_payload.size() << "\r\n";
+                http_response << "Connection: close\r\n\r\n";
+                http_response << json_payload;
+            }
 
             string full_response = http_response.str();
             write(client_socket, full_response.c_str(), full_response.size());

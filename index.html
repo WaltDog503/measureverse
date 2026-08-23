@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShakingMyHead LLC | Measureverse Control Panel</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 2rem 1rem; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 1.5rem; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+    header h1 { font-size: 1.6rem; color: var(--text); letter-spacing: -0.5px; }
+    header p { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
+    .form-group { margin-bottom: 1.25rem; }
+    .label-row { display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.9rem; font-weight: 500; }
+    .label-val { color: var(--accent); font-weight: 700; }
+    input[type="range"] { width: 100%; height: 6px; border-radius: 3px; accent-color: var(--accent); background: var(--border); outline: none; }
+    .result-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .stat-tile { background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+    .stat-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 4px; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; color: #fff; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .badge-success { background: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
+    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ShakingMyHead LLC — Measureverse</h1>
+      <p>Real-time dimensional sizing engine backed by in-memory logarithmic binary search.</p>
+    </header>
+
+    <div class="card">
+      <h2>1. Input Measurement Parameters</h2>
+      
+      <div class="form-group">
+        <div class="label-row">
+          <span>Raw Sensor Reading (inches/units)</span>
+          <span class="label-val" id="raw_display">22.4</span>
+        </div>
+        <input type="range" id="raw_reading" min="5" max="50" step="0.1" value="22.4" />
+      </div>
+
+      <div class="form-group">
+        <div class="label-row">
+          <span>Scale Calibration Factor</span>
+          <span class="label-val" id="scale_display">1.05</span>
+        </div>
+        <input type="range" id="scale_factor" min="0.8" max="1.5" step="0.01" value="1.05" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Live Calculation & SKU Match</h2>
+      <div class="result-box">
+        <div class="stat-tile">
+          <div class="stat-label">Computed Dimension</div>
+          <div class="stat-value" id="res_dimension">--</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Matched SKU</div>
+          <div class="stat-value" id="res_sku">--</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Category</div>
+          <div class="stat-value" id="res_category">--</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Stock Status</div>
+          <div class="stat-value" id="res_stock">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const rawInput = document.getElementById('raw_reading');
+    const scaleInput = document.getElementById('scale_factor');
+    const rawDisplay = document.getElementById('raw_display');
+    const scaleDisplay = document.getElementById('scale_display');
+
+    async function sendMeasurement() {
+      const raw = parseFloat(rawInput.value);
+      const scale = parseFloat(scaleInput.value);
+
+      rawDisplay.textContent = raw.toFixed(1);
+      scaleDisplay.textContent = scale.toFixed(2);
+
+      try {
+        const response = await fetch('/api/v1/measure', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ raw_reading: raw, scale_factor: scale })
+        });
+
+        const data = await response.json();
+        document.getElementById('res_dimension').textContent = data.target_dimension.toFixed(2);
+        document.getElementById('res_sku').textContent = data.matched_sku;
+        document.getElementById('res_category').textContent = data.category || '--';
+
+        const stockEl = document.getElementById('res_stock');
+        if (data.status === 'success') {
+          stockEl.innerHTML = `<span class="badge badge-success">${data.stock_available} in stock</span>`;
+        } else {
+          stockEl.innerHTML = `<span class="badge badge-warning">Out of stock</span>`;
+        }
+      } catch (err) {
+        console.error('Error fetching calculation:', err);
+      }
+    }
+
+    rawInput.addEventListener('input', sendMeasurement);
+    scaleInput.addEventListener('input', sendMeasurement);
+
+    // Initial calculation on page load
+    sendMeasurement();
+  </script>
+</body>
+</html>
