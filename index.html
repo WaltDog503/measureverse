@@ -3,131 +3,514 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShakingMyHead LLC | Measureverse Control Panel</title>
+  <title>SHAKINGMYHEAD | The Atelier Measureverse</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --accent: #38bdf8;
-      --accent-hover: #0284c7;
-      --success: #22c55e;
-      --warning: #f59e0b;
-      --border: #334155;
+      --bg: #09090b;
+      --panel-bg: #121216;
+      --gold-primary: #d4af37;
+      --gold-light: #f3e5ab;
+      --gold-glow: rgba(212, 175, 55, 0.22);
+      --border: #23232a;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --success: #10b981;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 2rem 1rem; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 1.5rem; }
-    header { border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
-    header h1 { font-size: 1.6rem; color: var(--text); letter-spacing: -0.5px; }
-    header p { color: var(--text-muted); font-size: 0.9rem; margin-top: 4px; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.5rem; }
-    .card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: var(--accent); }
-    .form-group { margin-bottom: 1.25rem; }
-    .label-row { display: flex; justify-content: space-between; margin-bottom: 0.4rem; font-size: 0.9rem; font-weight: 500; }
-    .label-val { color: var(--accent); font-weight: 700; }
-    input[type="range"] { width: 100%; height: 6px; border-radius: 3px; accent-color: var(--accent); background: var(--border); outline: none; }
-    .result-box { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-top: 1rem; }
-    .stat-tile { background: #0b1120; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
-    .stat-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; margin-bottom: 4px; }
-    .stat-value { font-size: 1.25rem; font-weight: 700; color: #fff; }
-    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
-    .badge-success { background: rgba(34, 197, 94, 0.2); color: var(--success); border: 1px solid var(--success); }
-    .badge-warning { background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 2.5rem 1.5rem;
+    }
+    .atelier-container { width: 100%; max-width: 1160px; display: flex; flex-direction: column; gap: 2.2rem; }
+    
+    header { text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 1.75rem; }
+    header h1 {
+      font-family: "Didot", "Playfair Display", "Georgia", serif;
+      font-size: 2.3rem;
+      letter-spacing: 5px;
+      text-transform: uppercase;
+      color: #fff;
+      font-weight: 400;
+    }
+    header p {
+      color: var(--gold-primary);
+      font-size: 0.85rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 0.5rem;
+    }
+
+    .atelier-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+    @media (max-width: 900px) { .atelier-grid { grid-template-columns: 1fr; } }
+
+    .panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2rem;
+    }
+    .panel h2 {
+      font-family: "Didot", "Georgia", serif;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      color: var(--gold-light);
+      text-transform: uppercase;
+      margin-bottom: 1.75rem;
+      border-left: 2px solid var(--gold-primary);
+      padding-left: 0.75rem;
+      font-weight: 400;
+    }
+
+    .control-row { margin-bottom: 1.6rem; }
+    .control-meta { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.5rem; }
+    .control-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+    .control-value { font-family: "Georgia", serif; font-size: 1.1rem; color: var(--gold-primary); }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      accent-color: var(--gold-primary);
+      background: #27272a;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* Silhouette Visualizer */
+    .visualizer-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 50% 40%, #1a1921 0%, #0d0d10 100%);
+      position: relative;
+    }
+    svg#couture-svg {
+      width: 100%;
+      max-width: 360px;
+      height: 360px;
+      filter: drop-shadow(0 0 20px var(--gold-glow));
+    }
+    .gown-path {
+      fill: rgba(212, 175, 55, 0.08);
+      stroke: var(--gold-primary);
+      stroke-width: 1.8;
+      stroke-linejoin: round;
+      transition: d 0.12s ease-out;
+    }
+    .contour-guide { stroke: rgba(212, 175, 55, 0.3); stroke-dasharray: 3 3; stroke-width: 1; }
+
+    .ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; width: 100%; margin-top: 1.25rem; }
+    .ledger-cell { background: #0d0d10; border: 1px solid var(--border); padding: 0.85rem; text-align: center; }
+    .ledger-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); }
+    .ledger-val { font-family: "Georgia", serif; font-size: 1.05rem; color: #fff; margin-top: 4px; }
+    .silhouette-badge {
+      display: inline-block;
+      padding: 6px 18px;
+      border: 1px solid var(--gold-primary);
+      color: var(--gold-light);
+      font-size: 0.75rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 0.5rem;
+      background: rgba(212, 175, 55, 0.08);
+    }
+
+    /* Vault & Collection Section */
+    .section-title {
+      font-family: "Didot", "Georgia", serif;
+      font-size: 1.25rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--gold-light);
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+
+    .vault-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      background: #14141a;
+      border: 1px solid var(--border);
+      padding: 1.25rem;
+      border-radius: 4px;
+    }
+    .vault-bar input[type="text"], .vault-bar input[type="email"] {
+      flex: 1;
+      min-width: 180px;
+      background: #09090b;
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+    }
+    .vault-bar input:focus { border-color: var(--gold-primary); }
+
+    .btn-gold {
+      background: var(--gold-primary);
+      color: #09090b;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-gold:hover { background: var(--gold-light); }
+
+    /* Curated Garment Cards */
+    .collection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+    .garment-card {
+      background: #121216;
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: border-color 0.2s;
+    }
+    .garment-card:hover { border-color: var(--gold-primary); }
+    .garment-tag { font-size: 0.7rem; color: var(--gold-primary); letter-spacing: 1.5px; text-transform: uppercase; }
+    .garment-name { font-family: "Didot", "Georgia", serif; font-size: 1.2rem; color: #fff; margin: 0.4rem 0; }
+    .garment-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 1rem; }
+    .garment-price { font-family: "Georgia", serif; font-size: 1.1rem; color: var(--gold-light); margin-bottom: 1rem; }
+    .card-footer { display: flex; justify-content: space-between; align-items: center; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--gold-primary);
+      color: var(--gold-light);
+      padding: 0.5rem 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-outline:hover { background: var(--gold-primary); color: #09090b; }
+
+    /* Modal / Notification */
+    #status-banner {
+      display: none;
+      padding: 1rem;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid var(--success);
+      color: var(--success);
+      font-size: 0.85rem;
+      text-align: center;
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
-  <div class="container">
+  <div class="atelier-container">
     <header>
-      <h1>ShakingMyHead LLC — Measureverse</h1>
-      <p>Real-time dimensional sizing engine backed by in-memory logarithmic binary search.</p>
+      <h1>ShakingMyHead</h1>
+      <p>The Measureverse Atelier — Haute Sizing Engine</p>
     </header>
 
-    <div class="card">
-      <h2>1. Input Measurement Parameters</h2>
-      
-      <div class="form-group">
-        <div class="label-row">
-          <span>Raw Sensor Reading (inches/units)</span>
-          <span class="label-val" id="raw_display">22.4</span>
+    <div id="status-banner"></div>
+
+    <div class="atelier-grid">
+      <!-- Input Controls -->
+      <div class="panel">
+        <h2>Dimensional Fitting Parameters</h2>
+
+        <div class="control-row">
+          <div class="control-meta">
+            <span class="control-title">Bust Circumference</span>
+            <span class="control-value" id="bust_val">36.0"</span>
+          </div>
+          <input type="range" id="in_bust" min="30" max="46" step="0.2" value="36.0" />
         </div>
-        <input type="range" id="raw_reading" min="5" max="50" step="0.1" value="22.4" />
+
+        <div class="control-row">
+          <div class="control-meta">
+            <span class="control-title">Natural Waist</span>
+            <span class="control-value" id="waist_val">27.0"</span>
+          </div>
+          <input type="range" id="in_waist" min="23" max="38" step="0.2" value="27.0" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-meta">
+            <span class="control-title">Full Hip Curve</span>
+            <span class="control-value" id="hip_val">38.0"</span>
+          </div>
+          <input type="range" id="in_hip" min="33" max="48" step="0.2" value="38.0" />
+        </div>
+
+        <div class="control-row">
+          <div class="control-meta">
+            <span class="control-title">Couture Ease & Scale Factor</span>
+            <span class="control-value" id="scale_val">1.00x</span>
+          </div>
+          <input type="range" id="in_scale" min="0.85" max="1.25" step="0.01" value="1.00" />
+        </div>
       </div>
 
-      <div class="form-group">
-        <div class="label-row">
-          <span>Scale Calibration Factor</span>
-          <span class="label-val" id="scale_display">1.05</span>
+      <!-- Vector Silhouette Studio -->
+      <div class="panel visualizer-wrapper">
+        <div id="silhouette_pill" class="silhouette-badge">Hourglass Luxe</div>
+        
+        <svg id="couture-svg" viewBox="0 0 400 420">
+          <path id="gown_mesh" class="gown-path" d="" />
+          <line id="bust_level" class="contour-guide" x1="120" y1="110" x2="280" y2="110" />
+          <line id="waist_level" class="contour-guide" x1="140" y1="180" x2="260" y2="180" />
+          <line id="hip_level" class="contour-guide" x1="110" y1="260" x2="290" y2="260" />
+        </svg>
+
+        <div class="ledger-grid">
+          <div class="ledger-cell">
+            <div class="ledger-label">Atelier Tier SKU</div>
+            <div class="ledger-val" id="res_sku" style="font-size: 0.9rem; color: var(--gold-primary);">--</div>
+          </div>
+          <div class="ledger-cell">
+            <div class="ledger-label">Bust / Waist / Hip</div>
+            <div class="ledger-val" id="res_dimensions">--</div>
+          </div>
         </div>
-        <input type="range" id="scale_factor" min="0.8" max="1.5" step="0.01" value="1.05" />
       </div>
     </div>
 
-    <div class="card">
-      <h2>2. Live Calculation & SKU Match</h2>
-      <div class="result-box">
-        <div class="stat-tile">
-          <div class="stat-label">Computed Dimension</div>
-          <div class="stat-value" id="res_dimension">--</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Matched SKU</div>
-          <div class="stat-value" id="res_sku">--</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Category</div>
-          <div class="stat-value" id="res_category">--</div>
-        </div>
-        <div class="stat-tile">
-          <div class="stat-label">Stock Status</div>
-          <div class="stat-value" id="res_stock">--</div>
-        </div>
+    <!-- SIZING VAULT ACTIVATION -->
+    <div>
+      <h3 class="section-title">Save to Private Atelier Sizing Vault</h3>
+      <div class="vault-bar">
+        <input type="text" id="client_name" placeholder="Client Full Name" />
+        <input type="email" id="client_email" placeholder="Private Email (for Vault Token)" />
+        <button class="btn-gold" onclick="saveToVault()">Register Fit Token</button>
+      </div>
+    </div>
+
+    <!-- CURATED CAPSULE COLLECTION -->
+    <div>
+      <h3 class="section-title">Curated Made-to-Measure Capsule</h3>
+      <div class="collection-grid" id="collection-grid">
+        <!-- Dynamic Cards rendered via JS based on Silhouette -->
       </div>
     </div>
   </div>
 
   <script>
-    const rawInput = document.getElementById('raw_reading');
-    const scaleInput = document.getElementById('scale_factor');
-    const rawDisplay = document.getElementById('raw_display');
-    const scaleDisplay = document.getElementById('scale_display');
+    let currentFitData = {};
+    let clientVaultToken = "GUEST-FIT";
 
-    async function sendMeasurement() {
-      const raw = parseFloat(rawInput.value);
-      const scale = parseFloat(scaleInput.value);
+    const inBust = document.getElementById('in_bust');
+    const inWaist = document.getElementById('in_waist');
+    const inHip = document.getElementById('in_hip');
+    const inScale = document.getElementById('in_scale');
 
-      rawDisplay.textContent = raw.toFixed(1);
-      scaleDisplay.textContent = scale.toFixed(2);
+    const bustVal = document.getElementById('bust_val');
+    const waistVal = document.getElementById('waist_val');
+    const hipVal = document.getElementById('hip_val');
+    const scaleVal = document.getElementById('scale_val');
+
+    const gownMesh = document.getElementById('gown_mesh');
+    const bustLine = document.getElementById('bust_level');
+    const waistLine = document.getElementById('waist_level');
+    const hipLine = document.getElementById('hip_level');
+
+    const catalogDatabase = {
+      "Hourglass Luxe": [
+        { title: "The Silk Georgette Wrap Gown", price: "$1,850", desc: "Designed with a defined cinch waist and flowing bias drape that accents proportional curves." },
+        { title: "The Atelier Belted Wool Trench", price: "$2,400", desc: "Structured double-faced virgin wool cut with architectural shoulder lines and contour belt." }
+      ],
+      "Sculpted Mermaid": [
+        { title: "The Obsidian Crepe Evening Column", price: "$2,100", desc: "Engineered with targeted hip contouring and a trailing floor-length fishtail hem." },
+        { title: "The Sculpted Corset Midi", price: "$1,450", desc: "Structured boning through the torso that cascades into a tailored pencil silhouette." }
+      ],
+      "Empire Architectural": [
+        { title: "The Fluted Organza Halter Gown", price: "$2,600", desc: "Graceful empire line cut above the natural waist with cascading pleated volume." },
+        { title: "The Atelier Silk Cape Blouse", price: "$980", desc: "Fluid high-neck drape tailored with precision bust darts and effortless waist ease." }
+      ],
+      "Minimalist Column": [
+        { title: "The Straight-Line Tuxedo Dress", price: "$1,950", desc: "Sharp satin lapels with a clean minimalist silhouette draped uniformly from shoulder to hem." },
+        { title: "The Pure Heavy Silk Slip", price: "$1,200", desc: "Seamless liquid silk cut precisely straight across natural proportions." }
+      ],
+      "Classic Atelier": [
+        { title: "The Signature Tailored Day Dress", price: "$1,600", desc: "Timeless balanced proportions crafted in Italian double-crepe silk." },
+        { title: "The Monolith Structured Blazer", price: "$1,850", desc: "Bespoke hand-canvassed construction built to your exact bust-to-hip ratio." }
+      ]
+    };
+
+    function renderGownSilhouette(bust, waist, hip) {
+      const centerX = 200;
+      const neckY = 40;
+      const bustY = 110;
+      const waistY = 180;
+      const hipY = 260;
+      const hemY = 380;
+
+      const shoulderHalfWidth = 55;
+      const bustHalfWidth = (bust / 36.0) * 65;
+      const waistHalfWidth = (waist / 27.0) * 42;
+      const hipHalfWidth = (hip / 38.0) * 78;
+      const hemHalfWidth = hipHalfWidth * 1.18;
+
+      const d = `
+        M ${centerX - 25},${neckY}
+        Q ${centerX},${neckY + 12} ${centerX + 25},${neckY}
+        L ${centerX + shoulderHalfWidth},${neckY + 18}
+        Q ${centerX + bustHalfWidth + 10},${bustY - 20} ${centerX + bustHalfWidth},${bustY}
+        C ${centerX + bustHalfWidth - 5},${waistY - 30} ${centerX + waistHalfWidth + 8},${waistY - 10} ${centerX + waistHalfWidth},${waistY}
+        C ${centerX + waistHalfWidth},${waistY + 30} ${centerX + hipHalfWidth + 5},${hipY - 25} ${centerX + hipHalfWidth},${hipY}
+        Q ${centerX + hipHalfWidth + 8},${hipY + 60} ${centerX + hemHalfWidth},${hemY}
+        Q ${centerX},${hemY + 10} ${centerX - hemHalfWidth},${hemY}
+        Q ${centerX - hipHalfWidth - 8},${hipY + 60} ${centerX - hipHalfWidth},${hipY}
+        C ${centerX - hipHalfWidth - 5},${hipY - 25} ${centerX - waistHalfWidth},${waistY + 30} ${centerX - waistHalfWidth},${waistY}
+        C ${centerX - waistHalfWidth - 8},${waistY - 10} ${centerX - bustHalfWidth + 5},${bustY - 30} ${centerX - bustHalfWidth},${bustY}
+        Q ${centerX - bustHalfWidth - 10},${bustY - 20} ${centerX - shoulderHalfWidth},${neckY + 18}
+        Z
+      `;
+
+      gownMesh.setAttribute('d', d);
+
+      bustLine.setAttribute('x1', centerX - bustHalfWidth);
+      bustLine.setAttribute('x2', centerX + bustHalfWidth);
+      waistLine.setAttribute('x1', centerX - waistHalfWidth);
+      waistLine.setAttribute('x2', centerX + waistHalfWidth);
+      hipLine.setAttribute('x1', centerX - hipHalfWidth);
+      hipLine.setAttribute('x2', centerX + hipHalfWidth);
+    }
+
+    function renderCollection(silhouette) {
+      const container = document.getElementById('collection-grid');
+      const items = catalogDatabase[silhouette] || catalogDatabase["Classic Atelier"];
+
+      container.innerHTML = items.map(item => `
+        <div class="garment-card">
+          <div>
+            <div class="garment-tag">Crafted for ${silhouette}</div>
+            <div class="garment-name">${item.title}</div>
+            <div class="garment-desc">${item.desc}</div>
+          </div>
+          <div>
+            <div class="garment-price">${item.price}</div>
+            <div class="card-footer">
+              <span style="font-size:0.75rem; color:var(--text-muted);">Made-to-Measure</span>
+              <button class="btn-outline" onclick="reserveOrder('${item.title}', '${item.price}')">Order in My Fit</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function updateAtelier() {
+      const bust = parseFloat(inBust.value);
+      const waist = parseFloat(inWaist.value);
+      const hip = parseFloat(inHip.value);
+      const scale = parseFloat(inScale.value);
+
+      bustVal.textContent = bust.toFixed(1) + '"';
+      waistVal.textContent = waist.toFixed(1) + '"';
+      hipVal.textContent = hip.toFixed(1) + '"';
+      scaleVal.textContent = scale.toFixed(2) + 'x';
+
+      renderGownSilhouette(bust, waist, hip);
 
       try {
         const response = await fetch('/api/v1/measure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ raw_reading: raw, scale_factor: scale })
+          body: JSON.stringify({ bust, waist, hip, scale_factor: scale })
         });
 
         const data = await response.json();
-        document.getElementById('res_dimension').textContent = data.target_dimension.toFixed(2);
-        document.getElementById('res_sku').textContent = data.matched_sku;
-        document.getElementById('res_category').textContent = data.category || '--';
+        currentFitData = data;
 
-        const stockEl = document.getElementById('res_stock');
-        if (data.status === 'success') {
-          stockEl.innerHTML = `<span class="badge badge-success">${data.stock_available} in stock</span>`;
-        } else {
-          stockEl.innerHTML = `<span class="badge badge-warning">Out of stock</span>`;
-        }
+        document.getElementById('res_sku').textContent = data.matched_sku;
+        document.getElementById('res_dimensions').textContent = `${data.calibrated_bust.toFixed(1)}" · ${data.calibrated_waist.toFixed(1)}" · ${data.calibrated_hip.toFixed(1)}"`;
+        document.getElementById('silhouette_pill').textContent = data.silhouette;
+
+        renderCollection(data.silhouette);
       } catch (err) {
-        console.error('Error fetching calculation:', err);
+        console.error('Atelier Microservice error:', err);
       }
     }
 
-    rawInput.addEventListener('input', sendMeasurement);
-    scaleInput.addEventListener('input', sendMeasurement);
+    async function saveToVault() {
+      const name = document.getElementById('client_name').value.trim();
+      const email = document.getElementById('client_email').value.trim();
 
-    // Initial calculation on page load
-    sendMeasurement();
+      if (!name || !email) {
+        alert("Please enter client full name and email to generate a Vault Token.");
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/v1/vault/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            client_name: name,
+            client_email: email,
+            bust: currentFitData.calibrated_bust,
+            waist: currentFitData.calibrated_waist,
+            hip: currentFitData.calibrated_hip,
+            silhouette: currentFitData.silhouette,
+            matched_sku: currentFitData.matched_sku
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === 'success') {
+          clientVaultToken = data.fit_token;
+          showBanner(`✓ Client Sizing Vault Created: <strong>${data.fit_token}</strong> for ${data.client_name}. All orders are now bound to this profile.`);
+        }
+      } catch (e) {
+        console.error("Vault save error:", e);
+      }
+    }
+
+    async function reserveOrder(title, price) {
+      try {
+        const res = await fetch('/api/v1/orders/reserve', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fit_token: clientVaultToken,
+            garment_title: title,
+            garment_price: price,
+            bust: currentFitData.calibrated_bust,
+            waist: currentFitData.calibrated_waist,
+            hip: currentFitData.calibrated_hip,
+            silhouette: currentFitData.silhouette
+          })
+        });
+
+        const data = await res.json();
+        if (data.status === 'success') {
+          showBanner(`✓ Order Ticket Created: <strong>${data.order_token}</strong> — ${data.garment} (${data.price}) reserved under Fit Profile [${currentFitData.silhouette}].`);
+        }
+      } catch (e) {
+        console.error("Order error:", e);
+      }
+    }
+
+    function showBanner(msg) {
+      const banner = document.getElementById('status-banner');
+      banner.innerHTML = msg;
+      banner.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    inBust.addEventListener('input', updateAtelier);
+    inWaist.addEventListener('input', updateAtelier);
+    inHip.addEventListener('input', updateAtelier);
+    inScale.addEventListener('input', updateAtelier);
+
+    updateAtelier();
   </script>
 </body>
 </html>
