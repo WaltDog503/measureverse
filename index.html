@@ -391,7 +391,7 @@
       container.innerHTML = items.map(item => `
         <div class="garment-card">
           <div>
-            <div class="garment-tag">Crafted for ${silhouette}</div>
+            <div class="garment-tag">Crafted for ${escapeHtml(silhouette)}</div>
             <div class="garment-name">${item.title}</div>
             <div class="garment-desc">${item.desc}</div>
           </div>
@@ -427,6 +427,10 @@
         });
 
         const data = await response.json();
+        if (data.status !== 'success') {
+          console.warn('Measurement rejected:', data.message);
+          return;
+        }
         currentFitData = data;
 
         document.getElementById('res_sku').textContent = data.matched_sku;
@@ -466,7 +470,9 @@
         const data = await res.json();
         if (data.status === 'success') {
           clientVaultToken = data.fit_token;
-          showBanner(`✓ Client Sizing Vault Created: <strong>${data.fit_token}</strong> for ${data.client_name}. All orders are now bound to this profile.`);
+          showBanner(`✓ Client Sizing Vault Created: <strong>${escapeHtml(data.fit_token)}</strong> for ${escapeHtml(data.client_name)}. All orders are now bound to this profile.`);
+        } else {
+          showBanner(`Vault not saved: ${escapeHtml(data.message || 'unknown error')}`);
         }
       } catch (e) {
         console.error("Vault save error:", e);
@@ -491,11 +497,20 @@
 
         const data = await res.json();
         if (data.status === 'success') {
-          showBanner(`✓ Order Ticket Created: <strong>${data.order_token}</strong> — ${data.garment} (${data.price}) reserved under Fit Profile [${currentFitData.silhouette}].`);
+          showBanner(`✓ Order Ticket Created: <strong>${escapeHtml(data.order_token)}</strong> — ${escapeHtml(data.garment)} (${escapeHtml(data.price)}) reserved under Fit Profile [${escapeHtml(currentFitData.silhouette)}].`);
+        } else {
+          showBanner(`Order not reserved: ${escapeHtml(data.message || 'unknown error')}`);
         }
       } catch (e) {
         console.error("Order error:", e);
       }
+    }
+
+    // Escape any server/user-supplied text before it touches innerHTML (prevents XSS).
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
 
     function showBanner(msg) {

@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [g++, clang++]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev cmake clang
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_CXX_COMPILER=${{ matrix.compiler }} -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+      - name: API smoke test
+        run: |
+          cd build
+          MEASUREVERSE_DB=/tmp/ci.db ./measureverse_server 18080 &
+          sleep 1
+          curl -sf -X POST localhost:18080/api/v1/measure \
+            -H 'Content-Type: application/json' \
+            -d '{"bust":36,"waist":28,"hip":38,"scale_factor":1}' | tee /dev/stderr | grep -q '"status": "success"'
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:18080/favicon.ico)" = 404
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:18080/api/v1/measure -d '{"bust":-1}')" = 400
+          kill %1
