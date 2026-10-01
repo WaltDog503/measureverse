@@ -4,3 +4,6 @@ measureverse_server
 build/
 .vscode/
 *.log
+*.db
+*.db-journal
+compile_commands.json
